@@ -9,9 +9,9 @@
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#0b0c0a;--surface:#13140f;--surface2:#1a1c14;--border:#2a2d1f;
-  --text:#e8ead8;--muted:#7a7d65;--accent:#c8e06a;--accent2:#6ae0b4;
-  --danger:#e06a6a;--warn:#e0c46a;--good:#6ae094;--purple:#a06ae0;
+  --bg:#f4f5f0;--surface:#ffffff;--surface2:#eef0e8;--border:#d8dbd0;
+  --text:#1a1c14;--muted:#6b7060;--accent:#5a7a0a;--accent2:#1a8a6a;
+  --danger:#c0392b;--warn:#b8860b;--good:#1a7a3a;--purple:#6a3ab0;
 }
 body{font-family:'DM Mono',monospace;background:var(--bg);color:var(--text);min-height:100vh}
 .app{max-width:860px;margin:0 auto;padding:24px 14px 80px}
@@ -67,7 +67,7 @@ h1{font-family:‘Fraunces’,serif;font-size:clamp(1.5rem,5vw,2.2rem);font-weig
 .bill-row.paid .bill-name{text-decoration:line-through;color:var(–muted)}
 .check-box{width:21px;height:21px;border-radius:4px;border:1.5px solid var(–border);background:var(–surface2);cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:background .15s,border-color .15s;-webkit-tap-highlight-color:transparent;user-select:none}
 .check-box.on{background:var(–good);border-color:var(–good)}
-.check-box.on::after{content:‘✓’;font-size:0.7rem;color:#0b0c0a;font-weight:800}
+.check-box.on::after{content:‘✓’;font-size:0.7rem;color:#ffffff;font-weight:800}
 .bill-name{flex:1}
 .bill-amt{color:var(–muted);padding-left:6px;cursor:pointer;border-bottom:1px dashed transparent;transition:border-color .2s}
 .bill-amt:hover{border-color:var(–muted)}
@@ -193,13 +193,23 @@ function sv(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch{}}
 // ═══════════════════════════════════════════════════════════════
 let cfg = ld(gkey('cfg'), {
   name: 'My Budget',
-  basePay: 0,
-  commission: 0,
-  playLimit: 0,
+  basePay: 2000,
+  commission: 1017,
+  playLimit: 600,
   investTarget: 10   // percent
 });
 
-let bills = ld(gkey('bills'), []);
+let bills = ld(gkey('bills'), [
+  {id:'b1',name:'Car',amount:474},
+  {id:'b2',name:'Insurance',amount:40},
+  {id:'b3',name:'Gas',amount:75},
+  {id:'b4',name:'Spotify',amount:13},
+  {id:'b5',name:'Gym',amount:60},
+  {id:'b6',name:'Xbox Live',amount:30},
+  {id:'b7',name:'Funded Account',amount:80},
+  {id:'b8',name:'Pre-workout',amount:50},
+  {id:'b9',name:'Haircut',amount:30}
+]);
 // [{id, name, amount}]
 
 let savAccounts = ld(gkey('savAccounts'), []);
@@ -208,7 +218,21 @@ let savAccounts = ld(gkey('savAccounts'), []);
 let positions = ld(gkey('positions'), []);
 // [{id, ticker, broker, type, monthlyAmount, notes}]
 
-let payDates = ld(gkey('payDates'), []);
+let payDates = ld(gkey('payDates'), [
+  {date:'2026-01-09',type:'base'},{date:'2026-01-23',type:'commission'},
+  {date:'2026-02-06',type:'base'},{date:'2026-02-20',type:'commission'},
+  {date:'2026-03-06',type:'base'},{date:'2026-03-20',type:'commission'},
+  {date:'2026-04-03',type:'base'},{date:'2026-04-17',type:'commission'},
+  {date:'2026-05-01',type:'base'},{date:'2026-05-15',type:'commission'},
+  {date:'2026-05-29',type:'base'},{date:'2026-06-12',type:'base'},
+  {date:'2026-06-26',type:'commission'},{date:'2026-07-10',type:'base'},
+  {date:'2026-07-24',type:'commission'},{date:'2026-08-07',type:'base'},
+  {date:'2026-08-21',type:'commission'},{date:'2026-09-04',type:'base'},
+  {date:'2026-09-18',type:'commission'},{date:'2026-10-02',type:'base'},
+  {date:'2026-10-16',type:'commission'},{date:'2026-10-30',type:'base'},
+  {date:'2026-11-13',type:'commission'},{date:'2026-11-27',type:'base'},
+  {date:'2026-12-11',type:'commission'},{date:'2026-12-24',type:'base'}
+]);
 // [{date:'YYYY-MM-DD', type:'base'|'commission'}]
 
 // ═══════════════════════════════════════════════════════════════
