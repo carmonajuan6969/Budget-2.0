@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Monthly Budget Tracker</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;1,400&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,700;1,9..144,300&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0b0c0a; --surface: #13140f; --surface2: #1a1c14; --border: #2a2d1f;
+    --text: #e8ead8; --muted: #7a7d65; --accent: #c8e06a; --accent2: #6ae0b4;
+    --danger: #e06a6a; --warn: #e0c46a; --good: #6ae094;
+  }
+  body { font-family: 'DM Mono', monospace; background: var(--bg); color: var(--text); min-height: 100vh; }
+  .noise {
+    position: fixed; inset: 0; pointer-events: none; z-index: 0; opacity: 0.4;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+  }
+  .app { position: relative; z-index: 1; max-width: 900px; margin: 0 auto; padding: 32px 16px 80px; }
+  header { margin-bottom: 28px; border-bottom: 1px solid var(--border); padding-bottom: 20px; }
+  .header-top { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; }
+  h1 { font-family: 'Fraunces', serif; font-size: clamp(1.6rem,5vw,2.4rem); font-weight: 300; color: var(--accent); line-height: 1.1; }
+  .month-badge { font-size: 0.7rem; background: var(--surface2); border: 1px solid var(--border); color: var(--muted); padding: 4px 10px; border-radius: 2px; letter-spacing: 0.12em; text-transform: uppercase; }
+  .income-row { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 16px; }
+  .income-chip { background: var(--surface2); border: 1px solid var(--border); border-radius: 3px; padding: 8px 14px; font-size: 0.75rem; }
+  .income-chip span { color: var(--muted); display: block; font-size: 0.65rem; margin-bottom: 2px; letter-spacing: 0.08em; text-transform: uppercase; }
+  .income-chip strong { color: var(--accent); font-size: 0.95rem; }
+  .next-pay { background: var(--surface2); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 3px; padding: 10px 14px; margin-bottom: 20px; font-size: 0.75rem; }
+  .np-label { color: var(--muted); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em; display: block; margin-bottom: 2px; }
+  .overview { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 12px; margin-bottom: 28px; }
+  .ov-card { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 14px 16px; position: relative; overflow: hidden; }
+  .ov-card::after { content: ''; position: absolute; bottom: 0; left: 0; height: 3px; width: var(--pct,0%); background: var(--bar-color,var(--accent)); transition: width 0.6s cubic-bezier(.23,1,.32,1); }
+  .ov-label { font-size: 0.65rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 6px; }
+  .ov-amount { font-size: 1.3rem; color: var(--text); font-weight: 500; }
+  .ov-sub { font-size: 0.7rem; color: var(--muted); margin-top: 2px; }
+  .ov-pct { font-size: 0.7rem; position: absolute; top: 14px; right: 14px; }
+  .tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 24px; overflow-x: auto; }
+  .tab { padding: 10px 18px; font-family: 'DM Mono', monospace; font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; border: none; background: none; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color 0.2s, border-color 0.2s; white-space: nowrap; }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  .cat-grid { display: flex; flex-direction: column; gap: 10px; }
+  .cat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
+  .cat-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; cursor: pointer; gap: 12px; }
+  .cat-name { font-size: 0.8rem; font-weight: 500; letter-spacing: 0.05em; flex: 1; }
+  .cat-body { display: none; padding: 0 16px 14px; border-top: 1px solid var(--border); }
+  .cat-body.open { display: block; }
+  .summary-bar { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 16px; margin-bottom: 4px; }
+
+/* Bill checkbox rows */
+.bill-item { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(–border); font-size: 0.75rem; transition: opacity 0.25s; }
+.bill-item:last-child { border-bottom: none; }
+.bill-item.paid { opacity: 0.4; }
+.bill-item.paid .bill-name { text-decoration: line-through; color: var(–muted); }
+.bill-check { width: 20px; height: 20px; border-radius: 4px; border: 1.5px solid var(–border); background: var(–surface2); cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center; transition: background 0.15s, border-color 0.15s; user-select: none; }
+.bill-check.checked { background: var(–good); border-color: var(–good); }
+.bill-check.checked::after { content: ‘✓’; font-size: 0.72rem; color: #0b0c0a; font-weight: 800; }
+.bill-name { flex: 1; }
+.bill-amount { color: var(–muted); margin-left: auto; padding-left: 8px; }
+.paid-badge { font-size: 0.6rem; color: var(–good); letter-spacing: 0.06em; background: rgba(106,224,148,0.1); padding: 2px 6px; border-radius: 2px; }
+
+/* Play money */
+.expense-list { margin-top: 10px; margin-bottom: 10px; }
+.expense-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid var(–border); font-size: 0.75rem; }
+.expense-item:last-child { border-bottom: none; }
+.del-btn { background: none; border: none; color: var(–muted); cursor: pointer; font-size: 0.8rem; padding: 2px 6px; border-radius: 2px; transition: color 0.2s; }
+.del-btn:hover { color: var(–danger); }
+.add-row { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.add-row input { flex: 1; min-width: 100px; background: var(–surface2); border: 1px solid var(–border); color: var(–text); font-family: ‘DM Mono’, monospace; font-size: 0.75rem; padding: 7px 10px; border-radius: 3px; outline: none; transition: border-color 0.2s; }
+.add-row input:focus { border-color: var(–accent); }
+.add-row input::placeholder { color: var(–muted); }
+
+/* Savings */
+.save-card { background: var(–surface); border: 1px solid var(–border); border-radius: 4px; padding: 16px; }
+.save-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 10px; }
+.save-title { font-size: 0.68rem; color: var(–muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 6px; }
+.save-bal-wrap { display: flex; align-items: baseline; gap: 6px; }
+.save-bal { font-size: 1.45rem; color: var(–accent2); font-weight: 500; cursor: pointer; border-bottom: 1px dashed rgba(106,224,180,0.4); padding-bottom: 1px; transition: border-color 0.2s; }
+.save-bal:hover { border-color: var(–accent2); }
+.save-bal-input { font-size: 1.3rem; color: var(–accent2); font-weight: 500; background: var(–surface2); border: 1px solid var(–accent2); border-radius: 3px; padding: 3px 8px; font-family: ‘DM Mono’, monospace; width: 130px; outline: none; }
+.save-prog-wrap { height: 6px; background: var(–surface2); border-radius: 3px; margin: 10px 0 6px; overflow: hidden; }
+.save-prog-bar { height: 100%; background: var(–accent2); border-radius: 3px; transition: width 0.6s ease; }
+.save-meta { display: flex; justify-content: space-between; font-size: 0.68rem; color: var(–muted); }
+.dep-list { margin-top: 10px; border-top: 1px solid var(–border); padding-top: 8px; }
+.dep-item { display: flex; justify-content: space-between; align-items: center; font-size: 0.72rem; padding: 5px 0; color: var(–muted); }
+.dep-item:not(:last-child) { border-bottom: 1px solid var(–border); }
+.dep-amt { color: var(–accent2); }
+.dep-date { font-size: 0.63rem; opacity: 0.7; }
+
+.btn { background: var(–accent); color: var(–bg); border: none; cursor: pointer; font-family: ‘DM Mono’, monospace; font-size: 0.72rem; font-weight: 500; padding: 7px 14px; border-radius: 3px; letter-spacing: 0.05em; transition: opacity 0.2s; white-space: nowrap; }
+.btn:hover { opacity: 0.85; }
+.btn.secondary { background: var(–surface2); color: var(–text); border: 1px solid var(–border); }
+.btn.ghost { background: none; color: var(–accent2); border: 1px solid rgba(106,224,180,0.4); }
+.btn.sm { padding: 5px 10px; font-size: 0.68rem; }
+.ok { color: var(–good); } .warn-c { color: var(–warn); } .over { color: var(–danger); }
+.reset-row { margin-top: 24px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.reset-row span { font-size: 0.7rem; color: var(–muted); }
+@media(max-width:500px){ .tab{padding:9px 11px;font-size:0.65rem} h1{font-size:1.5rem} }
+</style>
+
+</head>
+<body>
+<div class="noise"></div>
+<div class="app">
+  <header>
+    <div class="header-top">
+      <div>
+        <h1>Budget Tracker</h1>
+        <div style="font-size:0.7rem;color:var(--muted);margin-top:4px;font-style:italic">United Wireless · 2026</div>
+      </div>
+      <div class="month-badge" id="currentMonth">—</div>
+    </div>
+    <div class="income-row">
+      <div class="income-chip"><span>Base Pay</span><strong>$2,000</strong></div>
+      <div class="income-chip"><span>Commission</span><strong>$1,017</strong></div>
+      <div class="income-chip"><span>Total Income</span><strong>$3,017</strong></div>
+      <div class="income-chip"><span>Next Pay</span><strong id="nextPayDisp">—</strong></div>
+    </div>
+  </header>
+
+  <div class="next-pay">
+    <span class="np-label">Upcoming paycheck</span>
+    <span id="nextPayDetail">Loading...</span>
+  </div>
+
+  <div class="overview" id="overview"></div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('bills',this)">Bills</button>
+    <button class="tab" onclick="switchTab('play',this)">Play Money</button>
+    <button class="tab" onclick="switchTab('savings',this)">Savings</button>
+    <button class="tab" onclick="switchTab('investing',this)">Investing</button>
+  </div>
+
+  <div id="panel-bills" class="panel active"></div>
+  <div id="panel-play" class="panel"></div>
+  <div id="panel-savings" class="panel"></div>
+  <div id="panel-investing" class="panel"></div>
+
+  <div class="reset-row">
+    <button class="btn secondary" onclick="resetMonth()">↺ Reset Month</button>
+    <span>Resets bills, spending &amp; deposits (balances kept)</span>
+  </div>
+</div>
+
+<script>
+const BASE=2000, COMMISSION=1017, TOTAL=BASE+COMMISSION;
+
+const BILLS_LIST=[
+  {id:'car',       name:'Car',            amount:474},
+  {id:'insurance', name:'Insurance',      amount:40},
+  {id:'gas',       name:'Gas',            amount:75},
+  {id:'spotify',   name:'Spotify',        amount:13},
+  {id:'gym',       name:'Gym',            amount:60},
+  {id:'xbox',      name:'Xbox Live',      amount:30},
+  {id:'funded',    name:'Funded Account', amount:80},
+  {id:'prework',   name:'Pre-workout',    amount:50},
+  {id:'haircut',   name:'Haircut',        amount:30},
+];
+
+const SAVINGS_LIST=[
+  {id:'capone',  name:'Capital One',     apy:'3.14%', defaultBalance:2188, goal:5000},
+  {id:'flokeys', name:'Florida Keys',    apy:null,    defaultBalance:0,    goal:800},
+  {id:'moveout', name:'Moving Out Fund', apy:null,    defaultBalance:0,    goal:5000},
+];
+
+const PAY_DATES=[
+  {date:"2026-01-09",type:"base"},{date:"2026-01-23",type:"commission"},
+  {date:"2026-02-06",type:"base"},{date:"2026-02-20",type:"commission"},
+  {date:"2026-03-06",type:"base"},{date:"2026-03-20",type:"commission"},
+  {date:"2026-04-03",type:"base"},{date:"2026-04-17",type:"commission"},
+  {date:"2026-05-01",type:"base"},{date:"2026-05-15",type:"commission"},
+  {date:"2026-05-29",type:"base"},{date:"2026-06-12",type:"base"},
+  {date:"2026-06-26",type:"commission"},{date:"2026-07-10",type:"base"},
+  {date:"2026-07-24",type:"commission"},{date:"2026-08-07",type:"base"},
+  {date:"2026-08-21",type:"commission"},{date:"2026-09-04",type:"base"},
+  {date:"2026-09-18",type:"commission"},{date:"2026-10-02",type:"base"},
+  {date:"2026-10-16",type:"commission"},{date:"2026-10-30",type:"base"},
+  {date:"2026-11-13",type:"commission"},{date:"2026-11-27",type:"base"},
+  {date:"2026-12-11",type:"commission"},{date:"2026-12-24",type:"base"},
+];
+
+// ── STORAGE ──────────────────────────────────────────────────────────────────
+function mkey(s){const d=new Date();return`b26_${d.getFullYear()}_${d.getMonth()}_${s}`;}
+function ld(s,fb){try{const v=localStorage.getItem(mkey(s));return v!==null?JSON.parse(v):fb;}catch{return fb;}}
+function sv(s,d){try{localStorage.setItem(mkey(s),JSON.stringify(d));}catch{}}
+// Balances are NOT month-scoped — they persist always
+function ldBal(id){try{const v=localStorage.getItem(`b26_bal_${id}`);return v!==null?parseFloat(v):null;}catch{return null;}}
+function svBal(id,v){try{localStorage.setItem(`b26_bal_${id}`,String(v));}catch{}}
+
+let billsPaid   = ld('billsPaid',{});
+let playLog     = ld('playLog',[]);
+let savDeposits = ld('savDeposits',{});
+
+function getSavBalance(id){
+  const stored=ldBal(id);
+  if(stored!==null) return stored;
+  return SAVINGS_LIST.find(s=>s.id===id)?.defaultBalance||0;
+}
+
+// ── HELPERS ──────────────────────────────────────────────────────────────────
+function fmt(n){return'$'+Number(n).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0});}
+function fmtDate(iso){return new Date(iso).toLocaleDateString('en-US',{month:'short',day:'numeric'});}
+function barColor(p){return p>=100?'var(--danger)':p>=80?'var(--warn)':'var(--good)';}
+function statusCls(p){return p>=100?'over':p>=80?'warn-c':'ok';}
+
+function getBillsTotal(){return BILLS_LIST.reduce((a,b)=>a+b.amount,0);}
+function getBillsPaid(){return BILLS_LIST.filter(b=>billsPaid[b.id]).reduce((a,b)=>a+b.amount,0);}
+function getPlaySpent(){return playLog.reduce((a,i)=>a+i.amount,0);}
+function getSavDepositsTotal(){return SAVINGS_LIST.reduce((a,s)=>{return a+(savDeposits[s.id]||[]).reduce((x,d)=>x+d.amount,0);},0);}
+
+function nextPay(){
+  const t=new Date();t.setHours(0,0,0,0);
+  for(const p of PAY_DATES){const d=new Date(p.date);if(d>=t)return{date:d,type:p.type};}
+  return null;
+}
+
+// ── HEADER ───────────────────────────────────────────────────────────────────
+function renderHeader(){
+  const now=new Date();
+  document.getElementById('currentMonth').textContent=
+    now.toLocaleString('en-US',{month:'long',year:'numeric'}).toUpperCase();
+  const np=nextPay();
+  if(np){
+    const diff=Math.ceil((np.date-new Date())/86400000);
+    document.getElementById('nextPayDisp').textContent=
+      np.date.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    document.getElementById('nextPayDetail').textContent=
+      `${np.type==='commission'?'Base + Commission':'Base Pay'} — `+
+      `${np.date.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})} `+
+      `(${diff===0?'Today!':diff+' days away'})`;
+  }
+}
+
+// ── OVERVIEW ─────────────────────────────────────────────────────────────────
+function renderOverview(){
+  const paidCnt=BILLS_LIST.filter(b=>billsPaid[b.id]).length;
+  const billsPct=Math.round(getBillsPaid()/getBillsTotal()*100);
+  const playPct=Math.min(Math.round(getPlaySpent()/600*100),999);
+  const totalSpent=getBillsTotal()+getPlaySpent()+getSavDepositsTotal()+350;
+  const totalPct=Math.round(totalSpent/TOTAL*100);
+  const cards=[
+    {label:'Total Allocated',amount:fmt(totalSpent),sub:`of ${fmt(TOTAL)} income`,pct:totalPct,color:barColor(totalPct)},
+    {label:'Bills',amount:fmt(getBillsPaid()),sub:`${paidCnt}/${BILLS_LIST.length} paid · ${fmt(getBillsTotal())} total`,pct:billsPct,color:'#e0a06a'},
+    {label:'Play Money',amount:fmt(getPlaySpent()),sub:`of $600 limit`,pct:playPct,color:'#c8e06a'},
+    {label:'Savings',amount:fmt(getSavDepositsTotal()),sub:`deposited this month`,pct:Math.min(Math.round(getSavDepositsTotal()/400*100),999),color:'#6ae0b4'},
+    {label:'Investing',amount:fmt(getTotalInvesting()),sub:`${positions.length} position${positions.length!==1?'s':''}`,pct:Math.round(getTotalInvesting()/Math.round(TOTAL*0.1)*100),color:'#a06ae0'},
+  ];
+  document.getElementById('overview').innerHTML=cards.map(c=>`
+    <div class="ov-card" style="--pct:${Math.min(c.pct,100)}%;--bar-color:${c.color}">
+      <div class="ov-label">${c.label}</div>
+      <div class="ov-amount">${c.amount}</div>
+      <div class="ov-sub">${c.sub}</div>
+      <div class="ov-pct ${statusCls(c.pct)}">${c.pct}%</div>
+    </div>`).join('');
+}
+
+// ── BILLS ────────────────────────────────────────────────────────────────────
+function renderBills(){
+  const paidCnt=BILLS_LIST.filter(b=>billsPaid[b.id]).length;
+  const paidAmt=getBillsPaid();
+  const total=getBillsTotal();
+  const pct=Math.round(paidAmt/total*100);
+  let html=`<div class="cat-grid">
+    <div class="summary-bar">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span style="font-size:0.75rem;color:var(--muted)">BILLS PAID THIS MONTH</span>
+        <span class="${paidCnt===BILLS_LIST.length?'ok':'warn-c'}" style="font-size:0.75rem">${paidCnt} / ${BILLS_LIST.length}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
+        <span style="font-size:1.5rem;font-weight:500">${fmt(paidAmt)}</span>
+        <span style="font-size:0.8rem;color:var(--muted)">of ${fmt(total)}</span>
+      </div>
+      <div style="height:6px;background:var(--surface2);border-radius:3px;overflow:hidden">
+        <div style="height:100%;width:${pct}%;background:var(--good);border-radius:3px;transition:width 0.5s ease"></div>
+      </div>
+      <div style="font-size:0.7rem;color:var(--muted);margin-top:6px">${fmt(total-paidAmt)} still to pay</div>
+    </div>
+    <div class="cat-card">
+      <div class="cat-header" onclick="toggleBody('bill-list')">
+        <span class="cat-name">Tap to check off when paid</span>
+        <span style="font-size:0.72rem;color:var(--muted)">▾</span>
+      </div>
+      <div class="cat-body open" id="bill-list" style="padding-top:8px">`;
+  BILLS_LIST.forEach(b=>{
+    const paid=!!billsPaid[b.id];
+    html+=`<div class="bill-item ${paid?'paid':''}">
+      <div class="bill-check ${paid?'checked':''}" onclick="toggleBill('${b.id}')"></div>
+      <span class="bill-name">${b.name}</span>
+      ${paid?`<span class="paid-badge">PAID</span>`:''}
+      <span class="bill-amount">${fmt(b.amount)}</span>
+    </div>`;
+  });
+  html+=`</div></div></div>`;
+  document.getElementById('panel-bills').innerHTML=html;
+}
+
+function toggleBill(id){
+  billsPaid[id]=!billsPaid[id];
+  sv('billsPaid',billsPaid);
+  renderBills(); renderOverview();
+}
+
+// ── PLAY MONEY ───────────────────────────────────────────────────────────────
+function renderPlay(){
+  const spent=getPlaySpent(),limit=600;
+  const pct=Math.min(Math.round(spent/limit*100),100);
+  const rem=limit-spent;
+  let html=`<div class="cat-grid">
+    <div class="summary-bar">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span style="font-size:0.75rem;color:var(--muted)">PLAY MONEY SPENT</span>
+        <span class="${statusCls(pct)}" style="font-size:0.75rem">${pct}%</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
+        <span style="font-size:1.5rem;font-weight:500">${fmt(spent)}</span>
+        <span style="font-size:0.8rem;color:var(--muted)">limit ${fmt(limit)}</span>
+      </div>
+      <div style="height:6px;background:var(--surface2);border-radius:3px;overflow:hidden">
+        <div style="height:100%;width:${pct}%;background:${barColor(pct)};border-radius:3px;transition:width 0.5s ease"></div>
+      </div>
+      <div style="font-size:0.7rem;margin-top:6px;color:${rem>=0?'var(--good)':'var(--danger)'}">
+        ${rem>=0?`${fmt(rem)} left to spend`:`${fmt(Math.abs(rem))} over budget`}
+      </div>
+    </div>
+    <div class="cat-card">
+      <div class="cat-header" onclick="toggleBody('play-list')">
+        <span class="cat-name">Logged Spending (${playLog.length})</span>
+        <span style="font-size:0.72rem;color:var(--muted)">▾</span>
+      </div>
+      <div class="cat-body open" id="play-list">
+        <div class="expense-list">`;
+  if(!playLog.length){
+    html+=`<div style="font-size:0.72rem;color:var(--muted);padding:8px 0">Nothing logged yet. Go have fun!</div>`;
+  } else {
+    playLog.forEach((item,idx)=>{
+      html+=`<div class="expense-item">
+        <span>${item.name}</span>
+        <span style="display:flex;align-items:center;gap:8px">
+          <span>${fmt(item.amount)}</span>
+          <button class="del-btn" onclick="deletePlay(${idx})">✕</button>
+        </span>
+      </div>`;
+    });
+  }
+  html+=`</div>
+      <div class="add-row">
+        <input type="text" id="play-name" placeholder="What'd you spend on?" />
+        <input type="number" id="play-amt" placeholder="Amount" min="0" step="0.01" style="max-width:100px" />
+        <button class="btn" onclick="addPlay()">+ Add</button>
+      </div>
+    </div></div></div>`;
+  document.getElementById('panel-play').innerHTML=html;
+}
+function addPlay(){
+  const name=document.getElementById('play-name').value.trim();
+  const amount=parseFloat(document.getElementById('play-amt').value);
+  if(!name||isNaN(amount)||amount<=0)return;
+  playLog.push({name,amount});
+  sv('playLog',playLog);
+  renderPlay();renderOverview();
+}
+function deletePlay(idx){playLog.splice(idx,1);sv('playLog',playLog);renderPlay();renderOverview();}
+
+// ── SAVINGS ──────────────────────────────────────────────────────────────────
+function renderSavings(){
+  let html=`<div style="display:flex;flex-direction:column;gap:10px">`;
+  SAVINGS_LIST.forEach(s=>{
+    const bal=getSavBalance(s.id);
+    const deps=savDeposits[s.id]||[];
+    const totalDeps=deps.reduce((a,d)=>a+d.amount,0);
+    const pct=Math.min(Math.round(bal/s.goal*100),100);
+    html+=`<div class="save-card">
+      <div class="save-top">
+        <div>
+          <div class="save-title">${s.name}${s.apy?` · ${s.apy} APY`:''}</div>
+          <div class="save-bal-wrap">
+            <span class="save-bal" id="bal-disp-${s.id}" onclick="editBal('${s.id}')" title="Click to edit">${fmt(bal)}</span>
+            <span style="font-size:0.62rem;color:var(--muted)">✎ edit</span>
+          </div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:0.65rem;color:var(--muted);margin-bottom:4px">Goal: ${fmt(s.goal)}</div>
+          <div style="font-size:0.85rem" class="${statusCls(pct)}">${pct}%</div>
+        </div>
+      </div>
+      <div class="save-prog-wrap"><div class="save-prog-bar" style="width:${pct}%"></div></div>
+      <div class="save-meta">
+        <span>${fmt(Math.max(0,s.goal-bal))} to goal</span>
+        <span>${deps.length} deposit${deps.length!==1?'s':''} · +${fmt(totalDeps)} this month</span>
+      </div>
+      <div class="add-row" style="margin-top:12px">
+        <input type="text" id="dep-note-${s.id}" placeholder="Note (optional)" />
+        <input type="number" id="dep-amt-${s.id}" placeholder="Deposit $" min="0" step="0.01" style="max-width:110px" />
+        <button class="btn ghost sm" onclick="addDeposit('${s.id}')">+ Deposit</button>
+      </div>`;
+    if(deps.length){
+      html+=`<div class="dep-list">`;
+      [...deps].reverse().forEach((d,ri)=>{
+        const realIdx=deps.length-1-ri;
+        html+=`<div class="dep-item">
+          <span>${d.note||'Deposit'} <span class="dep-date">${fmtDate(d.date)}</span></span>
+          <span style="display:flex;align-items:center;gap:8px">
+            <span class="dep-amt">+${fmt(d.amount)}</span>
+            <button class="del-btn" onclick="deleteDeposit('${s.id}',${realIdx})">✕</button>
+          </span>
+        </div>`;
+      });
+      html+=`</div>`;
+    }
+    html+=`</div>`;
+  });
+  html+=`</div>`;
+  document.getElementById('panel-savings').innerHTML=html;
+}
+
+function editBal(id){
+  const cur=getSavBalance(id);
+  const disp=document.getElementById(`bal-disp-${id}`);
+  if(!disp)return;
+  const inp=document.createElement('input');
+  inp.type='number';inp.className='save-bal-input';inp.value=cur;inp.min=0;inp.step=0.01;
+  disp.replaceWith(inp);inp.focus();inp.select();
+  function commit(){
+    const v=parseFloat(inp.value);
+    if(!isNaN(v)&&v>=0)svBal(id,v);
+    renderSavings();renderOverview();
+  }
+  inp.addEventListener('blur',commit);
+  inp.addEventListener('keydown',e=>{if(e.key==='Enter')inp.blur();if(e.key==='Escape'){svBal(id,cur);inp.blur();}});
+}
+
+function addDeposit(id){
+  const noteEl=document.getElementById(`dep-note-${id}`);
+  const amtEl=document.getElementById(`dep-amt-${id}`);
+  const amount=parseFloat(amtEl.value);
+  if(isNaN(amount)||amount<=0)return;
+  const note=noteEl.value.trim();
+  if(!savDeposits[id])savDeposits[id]=[];
+  savDeposits[id].push({amount,note,date:new Date().toISOString()});
+  svBal(id,getSavBalance(id)+amount);
+  sv('savDeposits',savDeposits);
+  noteEl.value='';amtEl.value='';
+  renderSavings();renderOverview();
+}
+function deleteDeposit(id,idx){
+  const dep=savDeposits[id][idx];
+  savDeposits[id].splice(idx,1);
+  svBal(id,Math.max(0,getSavBalance(id)-dep.amount));
+  sv('savDeposits',savDeposits);
+  renderSavings();renderOverview();
+}
+
+// ── INVESTING ────────────────────────────────────────────────────────────────
+// positions: [{id, ticker, broker, type, monthlyAmount, notes}]
+// Persisted globally (not month-scoped)
+function ldPositions(){
+  try{const v=localStorage.getItem('b26_positions');return v?JSON.parse(v):null;}catch{return null;}
+}
+function svPositions(p){try{localStorage.setItem('b26_positions',JSON.stringify(p));}catch{}}
+
+let positions = ldPositions() || [
+  {id:'pos_voo', ticker:'VOO', broker:'Fidelity', type:'ETF', monthlyAmount:350, notes:'S&P 500 index fund'}
+];
+
+const POS_COLORS=['#a06ae0','#6a9ee0','#e06a9e','#e0c46a','#6ae0d4','#e09a6a','#9ae06a'];
+function posColor(idx){return POS_COLORS[idx%POS_COLORS.length];}
+
+function getTotalInvesting(){return positions.reduce((a,p)=>a+p.monthlyAmount,0);}
+
+function renderInvesting(){
+  const target=Math.round(TOTAL*0.1);
+  const total=getTotalInvesting();
+  const pct=Math.round(total/target*100);
+  const diff=total-target;
+
+  let html=`<div style="display:flex;flex-direction:column;gap:10px">`;
+
+  // Summary card
+  html+=`<div class="summary-bar">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <span style="font-size:0.75rem;color:var(--muted)">MONTHLY INVESTING</span>
+      <span style="font-size:0.75rem" class="${statusCls(pct)}">${pct}% of target</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
+      <span style="font-size:1.5rem;font-weight:500;color:#a06ae0">${fmt(total)}</span>
+      <span style="font-size:0.8rem;color:var(--muted)">${fmt(target)} target (10%)</span>
+    </div>
+    <div style="height:6px;background:var(--surface2);border-radius:3px;overflow:hidden">
+      <div style="height:100%;width:${Math.min(pct,100)}%;background:#a06ae0;border-radius:3px;transition:width 0.5s ease"></div>
+    </div>
+    <div style="font-size:0.7rem;margin-top:6px;color:${diff===0?'var(--good)':diff>0?'var(--warn)':'var(--muted)'}">
+      ${diff===0?'Exactly on target':diff>0?`${fmt(diff)} over 10% target — nice!`:`${fmt(Math.abs(diff))} under target`}
+    </div>
+  </div>`;
+
+  // Positions list
+  html+=`<div class="cat-card">
+    <div class="cat-header" onclick="toggleBody('inv-positions')">
+      <span class="cat-name">Positions (${positions.length})</span>
+      <span style="font-size:0.72rem;color:var(--muted)">▾</span>
+    </div>
+    <div class="cat-body open" id="inv-positions" style="padding-top:8px">`;
+
+  if(!positions.length){
+    html+=`<div style="font-size:0.72rem;color:var(--muted);padding:8px 0">No positions yet. Add one below.</div>`;
+  } else {
+    positions.forEach((p,idx)=>{
+      const pctOfTotal=total>0?Math.round(p.monthlyAmount/total*100):0;
+      const c=posColor(idx);
+      html+=`<div style="padding:10px 0;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:6px" id="posrow-${p.id}">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:10px;height:10px;border-radius:50%;background:${c};flex-shrink:0"></div>
+          <span style="font-size:0.85rem;font-weight:500;color:${c};flex:1">${p.ticker}</span>
+          <span style="font-size:0.75rem;font-weight:500">${fmt(p.monthlyAmount)}<span style="color:var(--muted);font-size:0.68rem">/mo</span></span>
+          <button class="del-btn" onclick="deletePosition('${p.id}')" title="Remove">✕</button>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;padding-left:20px">
+          <span style="font-size:0.68rem;color:var(--muted)">${p.broker||'—'}</span>
+          <span style="font-size:0.65rem;background:var(--surface2);border:1px solid var(--border);padding:1px 6px;border-radius:2px;color:var(--muted)">${p.type||'—'}</span>
+          ${p.notes?`<span style="font-size:0.68rem;color:var(--muted);font-style:italic">${p.notes}</span>`:''}
+        </div>
+        <div style="padding-left:20px">
+          <div style="height:3px;background:var(--surface2);border-radius:2px;overflow:hidden;max-width:200px">
+            <div style="height:100%;width:${pctOfTotal}%;background:${c};border-radius:2px"></div>
+          </div>
+          <span style="font-size:0.65rem;color:var(--muted)">${pctOfTotal}% of portfolio</span>
+        </div>
+        <div style="display:flex;gap:6px;padding-left:20px;flex-wrap:wrap;margin-top:2px">
+          <input type="number" id="edit-amt-${p.id}" value="${p.monthlyAmount}" min="0" step="1"
+            style="width:90px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'DM Mono',monospace;font-size:0.72rem;padding:4px 8px;border-radius:3px;outline:none"
+            placeholder="$/mo" />
+          <input type="text" id="edit-notes-${p.id}" value="${p.notes||''}"
+            style="flex:1;min-width:100px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'DM Mono',monospace;font-size:0.72rem;padding:4px 8px;border-radius:3px;outline:none"
+            placeholder="Notes..." />
+          <button class="btn sm secondary" onclick="savePosition('${p.id}')">Save</button>
+        </div>
+      </div>`;
+    });
+  }
+
+  // Add new position form
+  html+=`<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
+    <div style="font-size:0.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px">Add Position</div>
+    <div class="add-row" style="flex-wrap:wrap">
+      <input type="text" id="new-ticker" placeholder="Ticker (e.g. VTI)" style="max-width:100px;text-transform:uppercase" />
+      <input type="text" id="new-broker" placeholder="Broker" style="max-width:110px" />
+      <input type="text" id="new-type" placeholder="Type (ETF, Stock…)" style="max-width:120px" />
+      <input type="number" id="new-amt" placeholder="$/mo" min="0" step="1" style="max-width:80px" />
+      <input type="text" id="new-notes" placeholder="Notes (optional)" />
+      <button class="btn" onclick="addPosition()">+ Add</button>
+    </div>
+  </div>
+  </div></div>
+
+  <!-- Allocation donut-style bar -->
+  ${positions.length>1?`<div style="background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:14px">
+    <div style="font-size:0.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px">Portfolio Allocation</div>
+    <div style="display:flex;height:10px;border-radius:5px;overflow:hidden;gap:1px">
+      ${positions.map((p,i)=>{
+        const w=total>0?Math.round(p.monthlyAmount/total*100):0;
+        return`<div style="width:${w}%;background:${posColor(i)};transition:width 0.5s ease" title="${p.ticker}: ${w}%"></div>`;
+      }).join('')}
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:8px">
+      ${positions.map((p,i)=>{
+        const w=total>0?Math.round(p.monthlyAmount/total*100):0;
+        return`<span style="font-size:0.68rem;color:var(--muted);display:flex;align-items:center;gap:4px">
+          <span style="width:8px;height:8px;border-radius:50%;background:${posColor(i)};display:inline-block"></span>
+          ${p.ticker} ${w}%
+        </span>`;
+      }).join('')}
+    </div>
+  </div>`:''}
+  </div>`;
+
+  document.getElementById('panel-investing').innerHTML=html;
+
+  // Focus style on inputs
+  document.querySelectorAll('#panel-investing input').forEach(inp=>{
+    inp.addEventListener('focus',()=>inp.style.borderColor='var(--accent)');
+    inp.addEventListener('blur',()=>inp.style.borderColor='var(--border)');
+  });
+}
+
+function addPosition(){
+  const ticker=(document.getElementById('new-ticker').value||'').trim().toUpperCase();
+  const broker=(document.getElementById('new-broker').value||'').trim();
+  const type=(document.getElementById('new-type').value||'').trim();
+  const amt=parseFloat(document.getElementById('new-amt').value);
+  const notes=(document.getElementById('new-notes').value||'').trim();
+  if(!ticker||isNaN(amt)||amt<=0)return;
+  positions.push({id:'pos_'+Date.now(),ticker,broker,type,monthlyAmount:amt,notes});
+  svPositions(positions);
+  renderInvesting();renderOverview();
+}
+
+function savePosition(id){
+  const p=positions.find(x=>x.id===id);
+  if(!p)return;
+  const amt=parseFloat(document.getElementById(`edit-amt-${id}`)?.value);
+  const notes=(document.getElementById(`edit-notes-${id}`)?.value||'').trim();
+  if(!isNaN(amt)&&amt>=0)p.monthlyAmount=amt;
+  p.notes=notes;
+  svPositions(positions);
+  renderInvesting();renderOverview();
+}
+
+function deletePosition(id){
+  positions=positions.filter(p=>p.id!==id);
+  svPositions(positions);
+  renderInvesting();renderOverview();
+}
+
+// ── UTILS ────────────────────────────────────────────────────────────────────
+function toggleBody(id){const el=document.getElementById(id);if(el)el.classList.toggle('open');}
+function switchTab(tab,btn){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(`panel-${tab}`).classList.add('active');
+}
+function resetMonth(){
+  if(confirm('Reset bills, spending & deposits for this month?\n(Your savings balances will be kept.)')){
+    billsPaid={};playLog={};savDeposits={};
+    sv('billsPaid',billsPaid);sv('playLog',playLog);sv('savDeposits',savDeposits);
+    renderAll();
+  }
+}
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Enter')return;
+  const f=document.activeElement;if(!f||!f.id)return;
+  if(f.id==='play-amt')addPlay();
+  else if(f.id.startsWith('dep-amt-'))addDeposit(f.id.replace('dep-amt-',''));
+});
+
+function renderAll(){
+  renderHeader();renderOverview();
+  renderBills();renderPlay();renderSavings();renderInvesting();
+}
+renderAll();
+</script>
+
+</body>
+</html>
